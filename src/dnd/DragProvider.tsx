@@ -11,16 +11,14 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { Block } from '../domain/catalog';
-import type { AspectId } from '../domain/types';
-import { prefersReducedMotion } from '../motion/easing';
+import { prefersReducedMotion } from '../motion';
 
-export type DragPayload =
-  | { kind: 'block'; block: Block; id: string }
-  | { kind: 'round'; roundId: string }
-  | { kind: 'person'; personId: string }
-  | { kind: 'aspect'; aspect: AspectId; fromRoundId: string }
-  | { kind: 'meeting'; meetingId: string };
+/** Something being dragged: a row in one of the sortable lists. */
+export interface DragPayload {
+  /** Which list the row belongs to, so rows only land in their own list. */
+  list: string;
+  id: string;
+}
 
 export interface Point {
   x: number;
@@ -57,7 +55,7 @@ interface DragContextValue {
 
 export interface DraggableOptions {
   ghost: () => ReactNode;
-  /** Visual scale of the source, e.g. the canvas zoom, so the ghost matches it. */
+  /** Visual scale of the source, so the ghost matches it. */
   scale?: number | (() => number);
   onStart?: () => void;
   onEnd?: (dropped: boolean) => void;
@@ -67,6 +65,8 @@ export interface DraggableOptions {
   anchor?: 'grab' | 'cursor';
   /** Set for pinned items: called instead of starting a drag. */
   onRefuse?: () => void;
+  /** The element the ghost copies the size and place of, when the grab is on a handle inside it. */
+  source?: () => HTMLElement | null;
   disabled?: boolean;
 }
 
@@ -234,7 +234,7 @@ export function DragProvider({ children }: { children: ReactNode }) {
   const begin = useCallback(
     (event: ReactPointerEvent, payload: DragPayload, options: DraggableOptions) => {
       if (options.disabled || activeRef.current || event.button > 0) return;
-      const source = event.currentTarget as HTMLElement;
+      const source = options.source?.() ?? (event.currentTarget as HTMLElement);
       const start = { x: event.clientX, y: event.clientY };
       const isTouch = event.pointerType === 'touch';
       let started = false;

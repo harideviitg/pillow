@@ -1,102 +1,67 @@
-export type AspectId = 'layout' | 'copy' | 'imagery' | 'color';
-export type RoundKind = 'direction' | 'layout' | 'copy' | 'polish';
-export type RoundState = 'done' | 'live' | 'upcoming';
-export type NudgeChannel = 'email' | 'whatsapp';
-
-export interface Person {
-  id: string;
-  name: string;
-  role: string;
-  /** IANA time zone, e.g. "Asia/Kolkata". Missing means the viewer's own zone. */
-  timezone?: string;
-}
-
-export interface Nudge {
-  channel: NudgeChannel;
-  afterHours: number;
-}
-
-export interface ExtraRound {
-  days: number;
-  /** Free text so studios can write it in their own currency, e.g. "₹8,000". */
-  fee: string;
-}
-
-export interface Round {
-  id: string;
-  kind: RoundKind;
-  state: RoundState;
-  /** Aspects reviewers can comment on in this round. */
-  focus: AspectId[];
-  /** Lock layer rule: aspects that lock once this round is approved. */
-  lockOnApprove: AspectId[];
-  reviewerIds: string[];
-  /** Final say rule: the one person whose decision closes the round. */
-  finalSayId: string | null;
-  /** Reviewers who have finished reviewing the current version. */
-  reviewedIds: string[];
-  /** Deadline rule. */
-  closesAfterHours: number | null;
-  nudge: Nudge | null;
-  revisionsAllowed: number;
-  revisionsUsed: number;
-  extraRound: ExtraRound | null;
-  startedAt: number | null;
-  approvedAt: number | null;
-  approvedById: string | null;
-  decisionNote: string;
-  /** Last manual nudge per reviewer id. */
-  nudgedAt: Record<string, number>;
-}
-
-export type CommentResolution = 'open' | 'declined' | 'reopened';
-
-export interface Comment {
-  id: string;
-  authorId: string;
-  /** The round the comment was posted in. */
-  roundId: string;
-  aspect: AspectId;
-  text: string;
-  createdAt: number;
-  resolution: CommentResolution;
-}
-
-export interface ActivityEntry {
-  id: string;
-  at: number;
-  text: string;
-}
+/** A local calendar day, written as YYYY-MM-DD. */
+export type DayKey = string;
 
 export interface Project {
   id: string;
-  client: string;
   name: string;
-  people: Person[];
-  rounds: Round[];
-  comments: Comment[];
-  activity: ActivityEntry[];
+  /** Where you stopped, in your own words, so future you can pick it back up. */
+  leftOffAt: string;
+  leftOffAtUpdated: number | null;
+  archived: boolean;
+  createdAt: number;
 }
 
-export type MeetingKind = 'review' | 'client' | 'internal';
+/** A checklist item. Without a project it sits in the inbox. */
+export interface Task {
+  id: string;
+  text: string;
+  projectId: string | null;
+  done: boolean;
+  doneAt: number | null;
+  due: DayKey | null;
+  createdAt: number;
+}
 
-export interface Meeting {
+/** Something parked on an agent, a deploy, a review or a person. */
+export interface Wait {
+  id: string;
+  text: string;
+  projectId: string | null;
+  since: number;
+  doneAt: number | null;
+}
+
+export interface Block {
   id: string;
   title: string;
-  kind: MeetingKind;
-  /** Epoch milliseconds. */
   start: number;
   end: number;
-  attendeeIds: string[];
   projectId: string | null;
-  roundId: string | null;
-  link: string;
-  notes: string;
 }
 
-export interface AppData {
-  version: 2;
+export type RoutineKind = 'start' | 'shutdown' | 'custom';
+
+export interface Step {
+  id: string;
+  text: string;
+}
+
+export interface Routine {
+  id: string;
+  name: string;
+  kind: RoutineKind;
+  steps: Step[];
+  /** Steps ticked on one day; a new day starts empty. */
+  progress: { day: DayKey; done: string[] };
+  /** Days every step was ticked. */
+  completions: DayKey[];
+}
+
+export interface Data {
+  version: 1;
   projects: Project[];
-  activeProjectId: string;
-  meetings: Meeting[];
+  tasks: Task[];
+  waits: Wait[];
+  blocks: Block[];
+  routines: Routine[];
 }

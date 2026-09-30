@@ -1,4 +1,4 @@
-// jsdom lacks a few browser APIs the canvas relies on.
+// jsdom lacks a few browser APIs the app relies on.
 class ResizeObserverStub {
   observe() {}
   unobserve() {}

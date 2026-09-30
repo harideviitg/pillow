@@ -1,132 +1,107 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { navigate } from '../nav';
+import type { ReactNode } from 'react';
+import { navigate, TAB_HASH, type Tab } from '../nav';
 import { Icon, type IconName } from './Icon';
 import { Modal } from './Modal';
 
-const TABS: { id: 'builder' | 'calendar'; label: string; hash: string; icon: IconName; key: string }[] = [
-  { id: 'builder', label: 'Flow', hash: '#/', icon: 'flow', key: '1' },
-  { id: 'calendar', label: 'Calendar', hash: '#/calendar', icon: 'calendar', key: '2' },
+const TABS: { id: Tab; label: string; icon: IconName; key: string }[] = [
+  { id: 'today', label: 'Today', icon: 'today', key: '1' },
+  { id: 'projects', label: 'Projects', icon: 'folder', key: '2' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar', key: '3' },
+  { id: 'routines', label: 'Routines', icon: 'repeat', key: '4' },
 ];
 
-/** Flow / Calendar switch with a pill that slides between the options. */
-export function ViewSwitch({ current }: { current: 'builder' | 'calendar' }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>(`[data-tab="${current}"]`);
-    if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth });
-  }, [current]);
-
-  return (
-    <nav className="view-switch hide-sm" aria-label="Views" ref={ref}>
-      {pill && <span className="view-pill" style={{ transform: `translateX(${pill.left}px)`, width: pill.width }} aria-hidden="true" />}
-      {TABS.map((tab) => (
-        <a
-          key={tab.id}
-          href={tab.hash}
-          data-tab={tab.id}
-          className={`view-tab${current === tab.id ? ' is-current' : ''}`}
-          aria-current={current === tab.id ? 'page' : undefined}
-          onClick={(e) => {
-            e.preventDefault();
-            if (current !== tab.id) navigate(tab.hash);
-          }}
-        >
-          <Icon name={tab.icon} size={15} />
-          {tab.label}
-        </a>
-      ))}
-    </nav>
-  );
-}
-
-/** Phones get the same switch as a bottom tab bar within thumb reach. */
-export function BottomTabs({ current }: { current: 'builder' | 'calendar' }) {
-  return (
-    <nav className="bottom-tabs show-sm" aria-label="Views">
-      {TABS.map((tab) => (
-        <a
-          key={tab.id}
-          href={tab.hash}
-          className={`bottom-tab${current === tab.id ? ' is-current' : ''}`}
-          aria-current={current === tab.id ? 'page' : undefined}
-          onClick={(e) => {
-            e.preventDefault();
-            if (current !== tab.id) navigate(tab.hash);
-          }}
-        >
-          <Icon name={tab.icon} size={20} />
-          <span>{tab.label}</span>
-        </a>
-      ))}
-    </nav>
-  );
-}
+export const TAB_KEYS: Record<string, Tab> = Object.fromEntries(TABS.map((t) => [t.key, t.id]));
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-export const MOD = IS_MAC ? '⌘' : 'Ctrl';
+const MOD = IS_MAC ? '⌘' : 'Ctrl';
 
-const SHORTCUTS: { group: string; items: [string[], string][] }[] = [
-  {
-    group: 'Everywhere',
-    items: [
-      [[MOD, 'Z'], 'Undo'],
-      [[MOD, 'Shift', 'Z'], 'Redo'],
-      [['1'], 'Flow'],
-      [['2'], 'Calendar'],
-      [['?'], 'This list'],
-    ],
-  },
-  {
-    group: 'Flow',
-    items: [
-      [['+'], 'Zoom in'],
-      [['-'], 'Zoom out'],
-      [['0'], 'Zoom to 100%'],
-      [['F'], 'Fit the flow'],
-      [['Alt', '↑ ↓'], 'Move the selected round'],
-      [['Delete'], 'Remove the selected round'],
-      [['Esc'], 'Cancel a drag or deselect'],
-    ],
-  },
-  {
-    group: 'Calendar',
-    items: [
-      [['N'], 'New meeting'],
-      [['T'], 'Jump to today'],
-      [['← →'], 'Previous or next'],
-      [['D', 'W', 'M'], 'Day, week or month'],
-      [['Alt', '↑ ↓'], 'Move the meeting 15 minutes'],
-      [['Alt', '← →'], 'Move the meeting a day'],
-      [['Delete'], 'Delete the meeting'],
-    ],
-  },
+function TabLink({ tab, current, className }: { tab: (typeof TABS)[number]; current: Tab; className: string }) {
+  const on = current === tab.id;
+  return (
+    <a
+      href={TAB_HASH[tab.id]}
+      className={`${className}${on ? ' is-current' : ''}`}
+      aria-current={on ? 'page' : undefined}
+      onClick={(e) => {
+        e.preventDefault();
+        navigate(TAB_HASH[tab.id]);
+      }}
+    >
+      <Icon name={tab.icon} size={className === 'bottom-tab' ? 20 : 16} />
+      <span>{tab.label}</span>
+    </a>
+  );
+}
+
+export function Shell({ tab, onCapture, children }: { tab: Tab; onCapture: () => void; children: ReactNode }) {
+  return (
+    <div className="app">
+      <header className="topbar">
+        <a
+          href="#/"
+          className="logo"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('#/');
+          }}
+        >
+          <span className="logo-mark" aria-hidden="true" />
+          pillow
+        </a>
+        <nav className="tabs" aria-label="Sections">
+          {TABS.map((t) => (
+            <TabLink key={t.id} tab={t} current={tab} className="tab" />
+          ))}
+        </nav>
+        <button type="button" className="btn btn-sm btn-primary capture-btn" onClick={onCapture}>
+          <Icon name="plus" size={15} strokeWidth={2.2} />
+          Capture
+          <kbd>N</kbd>
+        </button>
+      </header>
+
+      <main className="main">{children}</main>
+
+      <button type="button" className="fab" aria-label="Capture" onClick={onCapture}>
+        <Icon name="plus" size={24} strokeWidth={2.2} />
+      </button>
+      <nav className="bottom-tabs" aria-label="Sections">
+        {TABS.map((t) => (
+          <TabLink key={t.id} tab={t} current={tab} className="bottom-tab" />
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+const SHORTCUTS: [string[], string][] = [
+  [['N'], 'Capture anything'],
+  [['1', '2', '3', '4'], 'Today, Projects, Calendar, Routines'],
+  [[MOD, 'Z'], 'Undo'],
+  [[MOD, 'Shift', 'Z'], 'Redo'],
+  [['T'], 'Calendar: jump to today'],
+  [['←', '→'], 'Calendar: earlier or later'],
+  [['?'], 'This list'],
 ];
 
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
-    <Modal title="Keyboard shortcuts" onClose={onClose} width={560}>
-      <div className="shortcut-grid">
-        {SHORTCUTS.map((group) => (
-          <section key={group.group} className="shortcut-group">
-            <h3>{group.group}</h3>
-            <dl>
-              {group.items.map(([keys, label]) => (
-                <div key={label} className="shortcut-row">
-                  <dt>
-                    {keys.map((k) => (
-                      <kbd key={k}>{k}</kbd>
-                    ))}
-                  </dt>
-                  <dd>{label}</dd>
-                </div>
+    <Modal title="Shortcuts" onClose={onClose} width={440}>
+      <dl className="shortcuts">
+        {SHORTCUTS.map(([keys, label]) => (
+          <div key={label} className="shortcut-row">
+            <dt>
+              {keys.map((k) => (
+                <kbd key={k}>{k}</kbd>
               ))}
-            </dl>
-          </section>
+            </dt>
+            <dd>{label}</dd>
+          </div>
         ))}
-      </div>
-      <p className="form-help">Drag works everywhere: blocks, rounds, people and aspects on the flow; meetings and deadlines on the calendar. Hold a finger down to pick something up on a touch screen.</p>
+      </dl>
+      <p className="section-note">
+        In the capture box: <code>#project</code> files it, a leading <code>wait</code> makes it a waiting item, <code>!today</code> or <code>!fri</code> sets a due day.
+      </p>
     </Modal>
   );
 }

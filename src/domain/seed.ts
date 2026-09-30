@@ -1,89 +1,60 @@
-import { DAY, HOUR } from './time';
-import type { Comment, Project, Round } from './types';
+import { addDays, atMinutes, dayKey, HOUR, MINUTE, startOfDay } from './dates';
+import { routineDay } from './routines';
+import type { Data, Routine } from './types';
 
-const baseRound = {
-  reviewerIds: ['anika', 'dev', 'meera'],
-  finalSayId: 'anika',
-  reviewedIds: [],
-  closesAfterHours: 48,
-  nudge: { channel: 'whatsapp' as const, afterHours: 24 },
-  revisionsAllowed: 2,
-  revisionsUsed: 0,
-  extraRound: { days: 2, fee: '' },
-  startedAt: null,
-  approvedAt: null,
-  approvedById: null,
-  decisionNote: '',
-  nudgedAt: {},
-};
+export function uid(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
 
-/** The sample project the design shows: a menu poster midway through its layout round. */
-export function sampleProject(now: number): Project {
-  const rounds: Round[] = [
-    {
-      ...baseRound,
-      id: 'r-direction',
-      kind: 'direction',
-      state: 'done',
-      focus: ['color'],
-      lockOnApprove: ['color'],
-      reviewedIds: ['anika', 'dev', 'meera'],
-      startedAt: now - 21 * DAY,
-      approvedAt: now - 18 * DAY,
-      approvedById: 'anika',
-      decisionNote: 'Picked B: warm type, full-bleed photo',
-    },
-    {
-      ...baseRound,
-      id: 'r-layout',
-      kind: 'layout',
-      state: 'live',
-      focus: ['layout'],
-      lockOnApprove: ['layout'],
-      reviewedIds: ['anika', 'dev'],
-      revisionsUsed: 1,
-      startedAt: now - 30 * HOUR,
-    },
-    { ...baseRound, id: 'r-copy', kind: 'copy', state: 'upcoming', focus: ['copy'], lockOnApprove: ['copy'] },
-    { ...baseRound, id: 'r-polish', kind: 'polish', state: 'upcoming', focus: ['imagery'], lockOnApprove: ['imagery'] },
-  ];
-
-  const comment = (id: string, authorId: string, aspect: Comment['aspect'], text: string, hoursAgo: number): Comment => ({
-    id,
-    authorId,
-    roundId: 'r-layout',
-    aspect,
-    text,
-    createdAt: now - hoursAgo * HOUR,
-    resolution: 'open',
-  });
-
+function routine(id: string, name: string, kind: Routine['kind'], steps: string[], completions: string[] = []): Routine {
   return {
-    id: 'monsoon-menu',
-    client: 'Kettle & Co',
-    name: 'Monsoon menu poster',
-    people: [
-      { id: 'anika', name: 'Anika', role: 'Brand head', timezone: 'Asia/Kolkata' },
-      { id: 'dev', name: 'Dev', role: 'Marketing', timezone: 'Asia/Kolkata' },
-      { id: 'meera', name: 'Meera', role: 'Founder', timezone: 'Europe/London' },
+    id,
+    name,
+    kind,
+    steps: steps.map((text, i) => ({ id: `${id}-${i}`, text })),
+    progress: { day: '', done: [] },
+    completions,
+  };
+}
+
+/** First-run data: one example project and the starter routines, all deletable. */
+export function seedData(now: number): Data {
+  const today = startOfDay(now);
+  const at = (days: number, hour: number, minute = 0) => atMinutes(addDays(today, days), hour * 60 + minute);
+  const daysAgo = (n: number) => routineDay(now - n * 24 * HOUR);
+  return {
+    version: 1,
+    projects: [
+      {
+        id: 'p-portfolio',
+        name: 'Portfolio site',
+        leftOffAt: 'Hero section is done. Next is the case study page; the draft copy is in notes.md.',
+        leftOffAtUpdated: now - 20 * HOUR,
+        archived: false,
+        createdAt: now - 6 * 24 * HOUR,
+      },
     ],
-    rounds,
-    comments: [
-      comment('c1', 'dev', 'layout', 'The price column sits too far from the dish names.', 22),
-      comment('c2', 'dev', 'copy', '"Monsoon specials" reads better than "Rainy day menu".', 21),
-      comment('c3', 'dev', 'copy', 'Add a veg or non-veg marker next to each dish.', 21),
-      comment('c4', 'dev', 'color', 'Could the green be a shade darker?', 20),
-      comment('c5', 'anika', 'layout', 'Give the hero photo more room at the top.', 7),
-      comment('c6', 'anika', 'copy', 'The masala chai description is too long.', 7),
-      comment('c7', 'anika', 'copy', 'The tagline needs a second pass.', 6),
+    tasks: [
+      { id: 't-font', text: 'Pick a font', projectId: 'p-portfolio', done: true, doneAt: now - 22 * HOUR, due: null, createdAt: now - 5 * 24 * HOUR },
+      { id: 't-case', text: 'Write the case study copy', projectId: 'p-portfolio', done: false, doneAt: null, due: dayKey(now), createdAt: now - 3 * 24 * HOUR },
+      { id: 't-shots', text: 'Export screenshots at 2x', projectId: 'p-portfolio', done: false, doneAt: null, due: null, createdAt: now - 3 * 24 * HOUR },
+      { id: 't-domain', text: 'Point the domain at Vercel', projectId: 'p-portfolio', done: false, doneAt: null, due: null, createdAt: now - 2 * 24 * HOUR },
+      { id: 't-og', text: 'Make an OG image', projectId: 'p-portfolio', done: false, doneAt: null, due: null, createdAt: now - 2 * 24 * HOUR },
+      { id: 't-idea', text: 'Try building a tiny CLI for this', projectId: null, done: false, doneAt: null, due: null, createdAt: now - 3 * HOUR },
     ],
-    activity: [
-      { id: 'a6', at: now - 6 * HOUR, text: 'WhatsApp nudge sent to Meera' },
-      { id: 'a5', at: now - 6 * HOUR, text: 'Anika finished reviewing Round 2: Layout' },
-      { id: 'a4', at: now - 20 * HOUR, text: 'Dev finished reviewing Round 2: Layout' },
-      { id: 'a3', at: now - 30 * HOUR, text: 'Revised version uploaded. Round 2: Layout restarted' },
-      { id: 'a2', at: now - 40 * HOUR, text: 'Anika asked for changes in Round 2: Layout' },
-      { id: 'a1', at: now - 18 * DAY, text: 'Anika approved Round 1: Direction. Color is locked' },
+    waits: [
+      { id: 'w-agent', text: 'Agent refactoring the nav component', projectId: 'p-portfolio', since: now - 40 * MINUTE, doneAt: null },
+      { id: 'w-review', text: 'Feedback from Sam on the hero', projectId: 'p-portfolio', since: now - 26 * HOUR, doneAt: null },
+    ],
+    blocks: [
+      { id: 'b-deep', title: 'Deep work: case study', start: at(0, 10), end: at(0, 12), projectId: 'p-portfolio' },
+      { id: 'b-gym', title: 'Gym', start: at(0, 18), end: at(0, 19), projectId: null },
+      { id: 'b-ship', title: 'Ship the portfolio', start: at(1, 14), end: at(1, 16), projectId: 'p-portfolio' },
+    ],
+    routines: [
+      routine('r-start', 'Start the day', 'start', ["Check what's waiting", 'Pick the one thing that matters today', 'Close Twitter'], [daysAgo(1), daysAgo(2)]),
+      routine('r-shutdown', 'Shut down', 'shutdown', ["Queue tomorrow's first task", 'Close every tab you opened today', 'Close the laptop'], [daysAgo(1)]),
+      routine('r-walk', 'Walk outside', 'custom', ['Walk outside'], [daysAgo(1), daysAgo(2), daysAgo(3)]),
     ],
   };
 }
