@@ -17,6 +17,8 @@ export type ProjectAction =
   | { type: 'insertRound'; index: number; kind: RoundKind; id: string }
   | { type: 'removeRound'; roundId: string }
   | { type: 'moveRound'; roundId: string; delta: -1 | 1 }
+  | { type: 'reorderRound'; roundId: string; toIndex: number }
+  | { type: 'moveAspect'; aspect: AspectId; fromRoundId: string; toRoundId: string }
   | { type: 'applyBlock'; roundId: string; block: Block }
   | { type: 'setAspect'; roundId: string; aspect: AspectId; target: AspectTarget }
   | { type: 'setLock'; roundId: string; aspects: AspectId[] }
@@ -133,6 +135,26 @@ function reopenAspect(project: Project, roundIndex: number, aspect: AspectId, no
   return log(next, now, `${aspectLabel(aspect)} reopened in ${roundName(project, round.id)}. That used a revision`);
 }
 
+/**
+ * Makes round `to` the one that reviews an aspect, taking it (and its lock rule)
+ * away from round `home`. Reopens it, at the cost of a revision, if it is locked there.
+ */
+function relocateAspect(project: Project, home: number, to: number, aspect: AspectId, now: number): Project | null {
+  const target = project.rounds[to];
+  if (!target || target.state === 'done') return null;
+  let next = project;
+  const source = project.rounds[home];
+  if (source && home !== to && source.state !== 'done') {
+    const hadLock = source.lockOnApprove.includes(aspect);
+    next = updateRound(next, source.id, (r) => ({ ...r, focus: without(r.focus, aspect), lockOnApprove: without(r.lockOnApprove, aspect) }));
+    if (hadLock) next = updateRound(next, target.id, (r) => ({ ...r, lockOnApprove: withItem(r.lockOnApprove, aspect) }));
+  }
+  const status = aspectStatus(next.rounds, to, aspect);
+  if (status.kind === 'focus') return next;
+  if (status.kind === 'locked') return reopenAspect(next, to, aspect, now);
+  return updateRound(next, target.id, (r) => ({ ...r, focus: withItem(r.focus, aspect) }));
+}
+
 export function projectReducer(project: Project, action: ProjectAction, now: number): Project {
   const findIndex = (roundId: string) => project.rounds.findIndex((r) => r.id === roundId);
 
@@ -163,6 +185,27 @@ export function projectReducer(project: Project, action: ProjectAction, now: num
       return { ...project, rounds };
     }
 
+    case 'reorderRound': {
+      const i = findIndex(action.roundId);
+      const round = project.rounds[i];
+      if (!round || round.state !== 'upcoming') return project;
+      const rest = project.rounds.filter((r) => r.id !== round.id);
+      const to = Math.min(rest.length, Math.max(firstEditableIndex(rest), action.toIndex));
+      if (to === i) return project;
+      rest.splice(to, 0, round);
+      return log({ ...project, rounds: rest }, now, `Moved ${roundKindDef(round.kind).label} to Round ${to + 1}`);
+    }
+
+    case 'moveAspect': {
+      const from = findIndex(action.fromRoundId);
+      const to = findIndex(action.toRoundId);
+      if (from < 0 || to < 0) return project;
+      if (from === to) return projectReducer(project, { type: 'setAspect', roundId: action.toRoundId, aspect: action.aspect, target: { kind: 'focus' } }, now);
+      const status = aspectStatus(project.rounds, from, action.aspect);
+      const home = status.kind === 'focus' ? from : status.kind === 'parked' ? status.roundIndex : -1;
+      return relocateAspect(project, home, to, action.aspect, now) ?? project;
+    }
+
     case 'applyBlock':
       return updateRound(project, action.roundId, (r) => applyBlockToRound(r, action.block, project.people));
 
@@ -176,11 +219,9 @@ export function projectReducer(project: Project, action: ProjectAction, now: num
         if (status.kind === 'locked') return reopenAspect(project, i, action.aspect, now) ?? project;
         return updateRound(project, round.id, (r) => ({ ...r, focus: withItem(r.focus, action.aspect) }));
       }
-      const targetId = action.target.roundId;
-      const k = findIndex(targetId);
+      const k = findIndex(action.target.roundId);
       if (k <= i) return project;
-      const moved = updateRound(project, round.id, (r) => ({ ...r, focus: without(r.focus, action.aspect) }));
-      return updateRound(moved, targetId, (r) => ({ ...r, focus: withItem(r.focus, action.aspect) }));
+      return relocateAspect(project, i, k, action.aspect, now) ?? project;
     }
 
     case 'setLock':

@@ -14,10 +14,17 @@ export interface FlowNode {
   h: number;
 }
 
+export type Polyline = [number, number][];
+
 export interface FlowEdge {
   key: string;
-  d: string;
+  /** One or more polylines, so edges can be tweened point by point. */
+  paths: Polyline[];
   kind: 'solid' | 'loop';
+}
+
+export function edgePath(paths: Polyline[]): string {
+  return paths.map((line) => line.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ')).join(' ');
 }
 
 export interface FlowLabel {
@@ -75,7 +82,10 @@ export function hasGate(round: Round): boolean {
   return round.state !== 'done' && round.finalSayId !== null;
 }
 
-const line = (x1: number, y1: number, x2: number, y2: number) => `M ${x1} ${y1} L ${x2} ${y2}`;
+const line = (x1: number, y1: number, x2: number, y2: number): Polyline => [
+  [x1, y1],
+  [x2, y2],
+];
 
 export function layoutFlow(project: Project): FlowLayout {
   const { rounds } = project;
@@ -92,11 +102,11 @@ export function layoutFlow(project: Project): FlowLayout {
   // A 48px run down the spine, holding an insert button where a round can go.
   const run = (index: number) => {
     if (index >= editableFrom) {
-      edges.push({ key: `run-${index}-a`, d: line(SPINE_X, y, SPINE_X, y + 10), kind: 'solid' });
+      edges.push({ key: `run-${index}-a`, paths: [line(SPINE_X, y, SPINE_X, y + 10)], kind: 'solid' });
       inserts.push({ index, x: SPINE_X - PLUS_SIZE / 2, y: y + 10 });
-      edges.push({ key: `run-${index}-b`, d: line(SPINE_X, y + 38, SPINE_X, y + 48), kind: 'solid' });
+      edges.push({ key: `run-${index}-b`, paths: [line(SPINE_X, y + 38, SPINE_X, y + 48)], kind: 'solid' });
     } else {
-      edges.push({ key: `run-${index}`, d: line(SPINE_X, y, SPINE_X, y + 48), kind: 'solid' });
+      edges.push({ key: `run-${index}`, paths: [line(SPINE_X, y, SPINE_X, y + 48)], kind: 'solid' });
     }
     y += 48;
   };
@@ -109,18 +119,24 @@ export function layoutFlow(project: Project): FlowLayout {
     y += h;
     if (!hasGate(round)) return;
 
-    edges.push({ key: `${round.id}-to-gate`, d: line(SPINE_X, y, SPINE_X, y + 24), kind: 'solid' });
+    edges.push({ key: `${round.id}-to-gate`, paths: [line(SPINE_X, y, SPINE_X, y + 24)], kind: 'solid' });
     y += 24;
     nodes.push({ key: `${round.id}:gate`, type: 'gate', roundId: round.id, roundIndex: i, x: SPINE_X - GATE.w / 2, y, ...GATE });
     y += GATE.h;
-    edges.push({ key: `${round.id}-from-gate`, d: line(SPINE_X, y, SPINE_X, y + 24), kind: 'solid' });
+    edges.push({ key: `${round.id}-from-gate`, paths: [line(SPINE_X, y, SPINE_X, y + 24)], kind: 'solid' });
     y += 24;
 
     const split = y;
     const top = split + 56;
     edges.push({
       key: `${round.id}-split`,
-      d: `${line(LEFT_X, split, RIGHT_X, split)} ${line(RIGHT_X, split, RIGHT_X, top)}`,
+      paths: [
+        [
+          [LEFT_X, split],
+          [RIGHT_X, split],
+          [RIGHT_X, top],
+        ],
+      ],
       kind: 'solid',
     });
     labels.push({ key: `${round.id}:approved`, kind: 'approved', x: LEFT_X - LABEL.w / 2, y: split + 14, ...LABEL });
@@ -136,19 +152,27 @@ export function layoutFlow(project: Project): FlowLayout {
 
     edges.push({
       key: `${round.id}-loop`,
-      d: `M ${RIGHT_X + REVISE.w / 2} ${top + REVISE.h / 2} L ${LOOP_X} ${top + REVISE.h / 2} L ${LOOP_X} ${roundTop + h / 2} L ${
-        SPINE_X + ROUND_W / 2 + 2
-      } ${roundTop + h / 2}`,
+      paths: [
+        [
+          [RIGHT_X + REVISE.w / 2, top + REVISE.h / 2],
+          [LOOP_X, top + REVISE.h / 2],
+          [LOOP_X, roundTop + h / 2],
+          [SPINE_X + ROUND_W / 2 + 2, roundTop + h / 2],
+        ],
+      ],
       kind: 'loop',
     });
 
     // The approved branch rejoins the spine below both branches.
     const merge = Math.max(leftBottom + 24, rightBottom - 28);
-    const leftPath =
-      leftBottom === top
-        ? line(LEFT_X, split, LEFT_X, merge)
-        : `${line(LEFT_X, split, LEFT_X, top)} ${line(LEFT_X, leftBottom, LEFT_X, merge)}`;
-    edges.push({ key: `${round.id}-merge`, d: `${leftPath} ${line(LEFT_X, merge, SPINE_X, merge)}`, kind: 'solid' });
+    // Always two polylines so the edge can tween when the lock step comes and goes.
+    const upper: Polyline = leftBottom === top ? line(LEFT_X, split, LEFT_X, split + 1) : line(LEFT_X, split, LEFT_X, top);
+    const lower: Polyline = [
+      [LEFT_X, leftBottom === top ? split : leftBottom],
+      [LEFT_X, merge],
+      [SPINE_X, merge],
+    ];
+    edges.push({ key: `${round.id}-merge`, paths: [upper, lower], kind: 'solid' });
     y = merge;
   });
 

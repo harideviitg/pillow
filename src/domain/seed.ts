@@ -63,9 +63,9 @@ export function sampleProject(now: number): Project {
     client: 'Kettle & Co',
     name: 'Monsoon menu poster',
     people: [
-      { id: 'anika', name: 'Anika', role: 'Brand head' },
-      { id: 'dev', name: 'Dev', role: 'Marketing' },
-      { id: 'meera', name: 'Meera', role: 'Founder' },
+      { id: 'anika', name: 'Anika', role: 'Brand head', timezone: 'Asia/Kolkata' },
+      { id: 'dev', name: 'Dev', role: 'Marketing', timezone: 'Asia/Kolkata' },
+      { id: 'meera', name: 'Meera', role: 'Founder', timezone: 'Europe/London' },
     ],
     rounds,
     comments: [

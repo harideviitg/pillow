@@ -7,6 +7,8 @@ export interface Person {
   id: string;
   name: string;
   role: string;
+  /** IANA time zone, e.g. "Asia/Kolkata". Missing means the viewer's own zone. */
+  timezone?: string;
 }
 
 export interface Nudge {
@@ -76,8 +78,25 @@ export interface Project {
   activity: ActivityEntry[];
 }
 
+export type MeetingKind = 'review' | 'client' | 'internal';
+
+export interface Meeting {
+  id: string;
+  title: string;
+  kind: MeetingKind;
+  /** Epoch milliseconds. */
+  start: number;
+  end: number;
+  attendeeIds: string[];
+  projectId: string | null;
+  roundId: string | null;
+  link: string;
+  notes: string;
+}
+
 export interface AppData {
-  version: 1;
+  version: 2;
   projects: Project[];
   activeProjectId: string;
+  meetings: Meeting[];
 }

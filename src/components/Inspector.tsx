@@ -14,9 +14,12 @@ import { aspectStatus, type AspectStatus } from '../domain/routing';
 import { closesLabel, relativeTime, shortDate } from '../domain/time';
 import type { AspectId, NudgeChannel, Project, Round } from '../domain/types';
 import { useStore } from '../state/store';
+import { formatDayLong, formatTime } from '../domain/calendar';
+import { useDraggable } from '../dnd/DragProvider';
+import { PersonGhost } from './BlocksPanel';
 import { ExtraRoundEditor } from './ExtraRoundEditor';
 import { focusSummary } from './FlowNodes';
-import { Icon, MoreIcon, type IconName } from './Icon';
+import { GripIcon, Icon, MoreIcon, type IconName } from './Icon';
 import { MenuButton, type MenuItem } from './Popover';
 import type { NodeSelection } from './selection';
 import { ASPECT_ICON, initials, joinList, plural, ROUND_ICON, RULE_ICON } from './ui';
@@ -29,6 +32,8 @@ interface InspectorProps {
   onApprove: (roundId: string) => void;
   onAddPerson: (roundId: string) => void;
   onApplyBlock: (roundId: string, block: Block) => void;
+  onScheduleMeeting: (roundId: string) => void;
+  onOpenMeeting: (meetingId: string) => void;
   open: boolean;
 }
 
@@ -60,7 +65,9 @@ export function Inspector(props: InspectorProps) {
 
   return (
     <aside className={`inspector${open ? ' is-open' : ''}`} aria-label={label}>
-      {content}
+      <div key={selection ? `${selection.type}:${'roundId' in selection ? selection.roundId : ''}` : 'none'} className="insp-swap">
+        {content}
+      </div>
     </aside>
   );
 }
@@ -201,8 +208,28 @@ function AspectRow({ project, round, index, aspect }: { project: Project; round:
     });
   });
 
+  const drag = useDraggable(round.state === 'done' ? null : { kind: 'aspect', aspect, fromRoundId: round.id }, {
+    anchor: 'cursor',
+    ghost: () => (
+      <div className="ghost-chip">
+        <span className="block-icon">
+          <Icon name={ASPECT_ICON[aspect]} size={16} />
+        </span>
+        <span className="ghost-text">
+          <span className="ghost-title">{label}</span>
+          <span className="ghost-sub">Drop on the round that should review it</span>
+        </span>
+      </div>
+    ),
+  });
+
   return (
-    <div className="aspect-row">
+    <div className={`aspect-row${round.state !== 'done' ? ' is-draggable' : ''}`} {...drag}>
+      {round.state !== 'done' && (
+        <span className="row-grip" aria-hidden="true">
+          <GripIcon />
+        </span>
+      )}
       <span className="node-icon node-icon-sm">
         <Icon name={ASPECT_ICON[aspect]} size={15} />
       </span>
@@ -210,10 +237,12 @@ function AspectRow({ project, round, index, aspect }: { project: Project; round:
       {round.state === 'done' ? (
         <span className={`status-btn tone-${view.tone} is-static`}>{content}</span>
       ) : (
-        <MenuButton label={`${label} feedback: ${view.text}, change`} className={`status-btn tone-${view.tone}`} items={items} width={250}>
-          {content}
-          <Icon name="chevronDown" size={12} strokeWidth={2.2} />
-        </MenuButton>
+        <span data-no-drag>
+          <MenuButton label={`${label} feedback: ${view.text}, change`} className={`status-btn tone-${view.tone}`} items={items} width={250}>
+            {content}
+            <Icon name="chevronDown" size={12} strokeWidth={2.2} />
+          </MenuButton>
+        </span>
       )}
     </div>
   );
@@ -222,6 +251,7 @@ function AspectRow({ project, round, index, aspect }: { project: Project; round:
 function ReviewerRow({ project, round, personId, now }: { project: Project; round: Round; personId: string; now: number }) {
   const { dispatch } = useStore();
   const person = project.people.find((p) => p.id === personId);
+  const drag = useDraggable(person ? { kind: 'person', personId } : null, { ghost: () => (person ? <PersonGhost person={person} /> : null), anchor: 'cursor' });
   if (!person) return null;
   const isFinal = round.finalSayId === personId;
   const reviewed = round.reviewedIds.includes(personId);
@@ -277,7 +307,7 @@ function ReviewerRow({ project, round, personId, now }: { project: Project; roun
   });
 
   return (
-    <li className="reviewer-row">
+    <li className="reviewer-row is-draggable" {...drag}>
       <span className="avatar" aria-hidden="true">
         {initials(person.name)}
       </span>
@@ -288,18 +318,21 @@ function ReviewerRow({ project, round, personId, now }: { project: Project; roun
           {pending && isFinal ? ', deciding' : pending ? ', pending' : ''}
         </span>
       </span>
-      {trailing}
-      {round.state !== 'done' && (
-        <MenuButton label={`More options for ${person.name}`} className="icon-btn icon-btn-sm muted" items={items} width={210}>
-          <MoreIcon />
-        </MenuButton>
-      )}
+      <span className="reviewer-trailing" data-no-drag>
+        {trailing}
+        {round.state !== 'done' && (
+          <MenuButton label={`More options for ${person.name}`} className="icon-btn icon-btn-sm muted" items={items} width={210}>
+            <MoreIcon />
+          </MenuButton>
+        )}
+      </span>
     </li>
   );
 }
 
-function RoundInspector({ project, round, index, now, onClose, onAddPerson, onApplyBlock }: RoundProps) {
-  const { dispatch } = useStore();
+function RoundInspector({ project, round, index, now, onClose, onAddPerson, onApplyBlock, onScheduleMeeting, onOpenMeeting }: RoundProps) {
+  const { dispatch, data } = useStore();
+  const meetings = data.meetings.filter((m) => m.roundId === round.id).sort((a, b) => a.start - b.start);
   const def = roundKindDef(round.kind);
   const status = statusLine(project, round, index, now);
   const editable = round.state !== 'done';
@@ -417,6 +450,29 @@ function RoundInspector({ project, round, index, now, onClose, onAddPerson, onAp
       </Section>
 
       <RevisionSection round={round} />
+
+      <Section title="Meetings" sub={meetings.length === 0 ? 'Nothing on the calendar for this round yet.' : undefined}>
+        {meetings.length > 0 && (
+          <ul className="meeting-links">
+            {meetings.map((m) => (
+              <li key={m.id}>
+                <button type="button" className={`meeting-link kind-${m.kind}${m.end < now ? ' is-past' : ''}`} onClick={() => onOpenMeeting(m.id)}>
+                  <span className="meeting-link-title">{m.title}</span>
+                  <span className="meeting-link-time">
+                    {formatDayLong(m.start)}, {formatTime(m.start)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {editable && (
+          <button type="button" className="btn btn-sm btn-ghost add-btn" onClick={() => onScheduleMeeting(round.id)}>
+            <Icon name="calendar" size={14} />
+            Schedule a review call
+          </button>
+        )}
+      </Section>
 
       {missing.length > 0 && (
         <Section title="Add a rule" sub="Rules keep a round from dragging on.">

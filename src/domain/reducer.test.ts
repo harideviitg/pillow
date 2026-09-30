@@ -47,9 +47,30 @@ describe('projectReducer', () => {
 
   it('moves an aspect to a later round when it is parked there', () => {
     const next = run(sampleProject(NOW), { type: 'setAspect', roundId: 'r-copy', aspect: 'copy', target: { kind: 'parked', roundId: 'r-polish' } });
-    expect(byId(next, 'r-copy').focus).toEqual([]);
-    expect(byId(next, 'r-polish').focus).toEqual(['imagery', 'copy']);
+    expect(byId(next, 'r-copy')).toMatchObject({ focus: [], lockOnApprove: [] });
+    expect(byId(next, 'r-polish')).toMatchObject({ focus: ['imagery', 'copy'], lockOnApprove: ['imagery', 'copy'] });
     expect(aspectStatus(next.rounds, 1, 'copy')).toEqual({ kind: 'parked', roundIndex: 3 });
+  });
+
+  it('drags an aspect to another round, taking its lock along instead of reopening it', () => {
+    const next = run(sampleProject(NOW), { type: 'moveAspect', aspect: 'copy', fromRoundId: 'r-layout', toRoundId: 'r-polish' });
+    expect(byId(next, 'r-copy')).toMatchObject({ focus: [], lockOnApprove: [] });
+    expect(byId(next, 'r-polish')).toMatchObject({ focus: ['imagery', 'copy'], revisionsUsed: 0 });
+    expect(aspectStatus(next.rounds, 1, 'copy')).toEqual({ kind: 'parked', roundIndex: 3 });
+  });
+
+  it('reopens a locked aspect dragged onto a later round', () => {
+    const next = run(sampleProject(NOW), { type: 'moveAspect', aspect: 'color', fromRoundId: 'r-layout', toRoundId: 'r-copy' });
+    expect(byId(next, 'r-copy')).toMatchObject({ focus: ['copy', 'color'], revisionsUsed: 1 });
+  });
+
+  it('reorders an upcoming round but never ahead of the live one', () => {
+    const project = sampleProject(NOW);
+    const moved = run(project, { type: 'reorderRound', roundId: 'r-polish', toIndex: 2 });
+    expect(moved.rounds.map((r) => r.id)).toEqual(['r-direction', 'r-layout', 'r-polish', 'r-copy']);
+    const clamped = run(project, { type: 'reorderRound', roundId: 'r-polish', toIndex: 0 });
+    expect(clamped.rounds.map((r) => r.id)).toEqual(['r-direction', 'r-layout', 'r-polish', 'r-copy']);
+    expect(run(project, { type: 'reorderRound', roundId: 'r-layout', toIndex: 3 })).toBe(project);
   });
 
   it('charges a revision to reopen a locked aspect', () => {

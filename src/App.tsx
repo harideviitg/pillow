@@ -1,29 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Builder } from './components/Builder';
+import { CalendarPage } from './components/calendar/CalendarPage';
 import { ProjectsView } from './components/ProjectsView';
 import { ReviewerView } from './components/ReviewerView';
-import { ToastProvider } from './components/Toast';
+import { ShortcutsDialog } from './components/Shell';
+import { ToastProvider, useToast } from './components/Toast';
+import { DragProvider } from './dnd/DragProvider';
 import type { AppData } from './domain/types';
+import { isTypingTarget, navigate, useHotkeys, useRoute } from './nav';
 import { StoreProvider, useStore } from './state/store';
 
-type Route = { name: 'builder' } | { name: 'projects' } | { name: 'review'; projectId: string; roundId: string };
-
-export function parseHash(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
-  if (parts[0] === 'projects') return { name: 'projects' };
-  if (parts[0] === 'review' && parts[1] && parts[2]) return { name: 'review', projectId: parts[1], roundId: parts[2] };
-  return { name: 'builder' };
-}
-
-function useRoute(): Route {
-  const [route, setRoute] = useState(() => parseHash(window.location.hash));
-  useEffect(() => {
-    const on = () => setRoute(parseHash(window.location.hash));
-    window.addEventListener('hashchange', on);
-    return () => window.removeEventListener('hashchange', on);
-  }, []);
-  return route;
-}
+export { parseHash } from './nav';
 
 function ReviewPage({ projectId, roundId }: { projectId: string; roundId: string }) {
   const { data, project, appDispatch } = useStore();
@@ -57,18 +44,71 @@ function ReviewPage({ projectId, roundId }: { projectId: string; roundId: string
   );
 }
 
+function GlobalKeys({ onShortcuts }: { onShortcuts: () => void }) {
+  const { undo, redo, canUndo, canRedo } = useStore();
+  const toast = useToast();
+  const handler = useCallback(
+    (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]');
+      if (mod && !typing && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (canRedo) {
+            redo();
+            toast('Redone');
+          }
+        } else if (canUndo) {
+          undo();
+          toast('Undone');
+        }
+        return;
+      }
+      if (mod && !typing && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        if (canRedo) {
+          redo();
+          toast('Redone');
+        }
+        return;
+      }
+      if (mod || e.altKey || isTypingTarget(e)) return;
+      if (e.key === '?') onShortcuts();
+      else if (e.key === '1') navigate('#/');
+      else if (e.key === '2') navigate('#/calendar');
+      else return;
+      e.preventDefault();
+    },
+    [undo, redo, canUndo, canRedo, toast, onShortcuts],
+  );
+  useHotkeys(handler);
+  return null;
+}
+
 function Routes() {
   const route = useRoute();
-  if (route.name === 'projects') return <ProjectsView onOpen={() => (window.location.hash = '#/')} />;
-  if (route.name === 'review') return <ReviewPage projectId={route.projectId} roundId={route.roundId} />;
-  return <Builder />;
+  const [shortcuts, setShortcuts] = useState(false);
+  let page;
+  if (route.name === 'projects') page = <ProjectsView onOpen={() => navigate('#/')} />;
+  else if (route.name === 'review') page = <ReviewPage projectId={route.projectId} roundId={route.roundId} />;
+  else if (route.name === 'calendar') page = <CalendarPage focusMeetingId={route.meetingId} />;
+  else page = <Builder focusRoundId={route.roundId} />;
+  return (
+    <>
+      <GlobalKeys onShortcuts={() => setShortcuts(true)} />
+      {page}
+      {shortcuts && <ShortcutsDialog onClose={() => setShortcuts(false)} />}
+    </>
+  );
 }
 
 export function App({ initial }: { initial?: AppData }) {
   return (
     <StoreProvider initial={initial}>
       <ToastProvider>
-        <Routes />
+        <DragProvider>
+          <Routes />
+        </DragProvider>
       </ToastProvider>
     </StoreProvider>
   );

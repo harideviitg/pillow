@@ -1,5 +1,7 @@
-import { aspectLabel, roundKindDef } from '../domain/catalog';
-import type { FlowNode } from '../domain/layout';
+import { memo } from 'react';
+import { aspectLabel, blockLabel, channelLabel, roundKindDef } from '../domain/catalog';
+import type { DragPayload } from '../dnd/DragProvider';
+import type { FlowNode, FlowNodeType } from '../domain/layout';
 import { personName } from '../domain/reducer';
 import { roundInbox } from '../domain/routing';
 import { dueLabel, shortDate } from '../domain/time';
@@ -14,8 +16,10 @@ export function focusSummary(round: Round): string {
 }
 
 export function nodeLabel(project: Project, node: FlowNode): string {
-  const round = node.roundIndex !== null ? project.rounds[node.roundIndex] : null;
-  const title = round ? `Round ${node.roundIndex! + 1}: ${roundKindDef(round.kind).label}` : '';
+  const index = node.roundId ? project.rounds.findIndex((r) => r.id === node.roundId) : -1;
+  const round = index >= 0 ? project.rounds[index] : null;
+  if (!round && node.roundId) return 'Round';
+  const title = round ? `Round ${index + 1}: ${roundKindDef(round.kind).label}` : '';
   switch (node.type) {
     case 'trigger':
       return 'Trigger: New version uploaded';
@@ -279,8 +283,68 @@ export function RoundMenu({ project, round, index, onApprove, onRequestChanges, 
     ];
   }
   return (
-    <MenuButton label={`More options for ${title}`} className="icon-btn icon-btn-sm node-more" items={items} placement="bottom-end" width={220}>
-      <MoreIcon />
-    </MenuButton>
+    <span className="node-more" data-no-drag>
+      <MenuButton label={`More options for ${title}`} className="icon-btn icon-btn-sm" items={items} placement="bottom-end" width={220}>
+        <MoreIcon />
+      </MenuButton>
+    </span>
   );
+}
+
+interface NodeBodyProps {
+  type: FlowNodeType;
+  project: Project;
+  round: Round | null;
+  index: number | null;
+  now: number;
+  isNext: boolean;
+}
+
+/** Node contents only re-render when their data changes, not on every animation frame. */
+export const NodeBody = memo(function NodeBody({ type, project, round, index, now, isNext }: NodeBodyProps) {
+  switch (type) {
+    case 'trigger':
+      return <TriggerNodeBody />;
+    case 'round':
+      return <RoundNodeBody project={project} round={round!} index={index!} now={now} isNext={isNext} />;
+    case 'gate':
+      return <GateNodeBody project={project} round={round!} />;
+    case 'lock':
+      return <LockNodeBody round={round!} />;
+    case 'revise':
+      return <ReviseNodeBody round={round!} index={index!} />;
+    case 'end':
+      return <EndNodeBody />;
+  }
+});
+
+/** What dropping the dragged thing on this node would do, or null if it can't land here. */
+export function dropHint(payload: DragPayload, type: FlowNodeType, project: Project, round: Round | null): string | null {
+  if (!round || round.state === 'done') return null;
+  switch (payload.kind) {
+    case 'block': {
+      if (payload.block.type === 'round') return null;
+      if (payload.block.type === 'nudge') {
+        return round.nudge?.channel === payload.block.channel ? null : `Nudge on ${channelLabel(payload.block.channel)}`;
+      }
+      const rule = payload.block.rule;
+      if (rule === 'final-say' && round.finalSayId) return null;
+      if (rule === 'lock-layer' && (round.lockOnApprove.length > 0 || round.focus.length === 0)) return null;
+      if (rule === 'deadline' && round.closesAfterHours !== null) return null;
+      if (rule === 'extra-round' && round.extraRound) return null;
+      return `Add ${blockLabel(payload.block).toLowerCase()}`;
+    }
+    case 'person': {
+      const name = personName(project, payload.personId);
+      if (type === 'gate') return round.finalSayId === payload.personId ? null : `Make ${name} the final say`;
+      return round.reviewerIds.includes(payload.personId) ? null : `Add ${name} as reviewer`;
+    }
+    case 'aspect': {
+      if (payload.fromRoundId === round.id && round.focus.includes(payload.aspect)) return null;
+      const label = aspectLabel(payload.aspect).toLowerCase();
+      return payload.fromRoundId === round.id ? `Bring ${label} into focus` : `Review ${label} here`;
+    }
+    default:
+      return null;
+  }
 }

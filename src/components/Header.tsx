@@ -6,7 +6,9 @@ import { ActivityPanel } from './ActivityPanel';
 import { CommentsPanel } from './CommentsPanel';
 import { Icon } from './Icon';
 import { MenuButton, Popover, usePopover } from './Popover';
+import { MOD, ViewSwitch } from './Shell';
 import { useToast } from './Toast';
+import { navigate } from '../nav';
 
 export function statusPill(project: Project): { text: string; tone: 'live' | 'done' | 'idle' } {
   const live = liveRoundIndex(project.rounds);
@@ -28,7 +30,7 @@ interface HeaderProps {
 }
 
 export function Header({ onPreview, onNewProject, onOpenBlocks, onSelectRound }: HeaderProps) {
-  const { data, project, appDispatch } = useStore();
+  const { data, project, appDispatch, undo, redo, canUndo, canRedo } = useStore();
   const toast = useToast();
   const activity = usePopover();
   const comments = usePopover();
@@ -52,7 +54,15 @@ export function Header({ onPreview, onNewProject, onOpenBlocks, onSelectRound }:
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <a className="icon-btn" href="#/projects" aria-label="Back to projects">
+        <a
+          className="icon-btn"
+          href="#/projects"
+          aria-label="Back to projects"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('#/projects');
+          }}
+        >
           <Icon name="back" size={18} />
         </a>
         <button type="button" className="icon-btn show-sm" aria-label="Open blocks" onClick={onOpenBlocks}>
@@ -97,7 +107,16 @@ export function Header({ onPreview, onNewProject, onOpenBlocks, onSelectRound }:
           {pill.text}
         </span>
       </div>
+      <ViewSwitch current="builder" />
       <div className="topbar-right">
+        <span className="undo-group hide-sm">
+          <button type="button" className="icon-btn icon-btn-md" aria-label="Undo" title={`Undo (${MOD}+Z)`} disabled={!canUndo} onClick={undo}>
+            <Icon name="undo" size={17} />
+          </button>
+          <button type="button" className="icon-btn icon-btn-md" aria-label="Redo" title={`Redo (${MOD}+Shift+Z)`} disabled={!canRedo} onClick={redo}>
+            <Icon name="redo" size={17} />
+          </button>
+        </span>
         <button type="button" className="icon-btn hide-sm" aria-label="Activity" {...activity.triggerProps}>
           <Icon name="clock" size={18} />
         </button>
@@ -115,9 +134,12 @@ export function Header({ onPreview, onNewProject, onOpenBlocks, onSelectRound }:
             }}
           />
         </Popover>
-        <button type="button" className="btn btn-outline hide-sm" onClick={onPreview}>
+        <button type="button" className="btn btn-outline hide-md" onClick={onPreview}>
           <Icon name="eye" size={16} />
           Preview as reviewer
+        </button>
+        <button type="button" className="icon-btn show-md hide-sm" aria-label="Preview as reviewer" onClick={onPreview}>
+          <Icon name="eye" size={18} />
         </button>
         <button type="button" className="btn btn-dark" onClick={share}>
           <Icon name="link" size={16} />

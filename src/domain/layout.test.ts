@@ -1,4 +1,4 @@
-import { layoutFlow } from './layout';
+import { edgePath, layoutFlow } from './layout';
 import { blankProject } from './projects';
 import { sampleProject } from './seed';
 
@@ -24,7 +24,7 @@ describe('layoutFlow', () => {
   it('draws the revision loop back into the round it came from', () => {
     const loop = layout.edges.find((e) => e.key === 'r-layout-loop');
     expect(loop?.kind).toBe('loop');
-    expect(loop?.d).toBe('M 726 638 L 744 638 L 744 356 L 562 356');
+    expect(edgePath(loop!.paths)).toBe('M 726 638 L 744 638 L 744 356 L 562 356');
   });
 
   it('labels both branches of the decision', () => {
