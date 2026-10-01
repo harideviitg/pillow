@@ -1,50 +1,47 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
+import { seedData } from './store/seed';
 
-describe('prototype', () => {
-  it('shows the week, the events and the task list', () => {
-    render(<App />);
-    expect(screen.getByText('September 2026')).toBeTruthy();
-    for (const day of ['Mon 21', 'Tue 22', 'Wed 23', 'Thu 24', 'Fri 25']) expect(screen.getByText(day)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Roadmap review, 11 AM – 12:30 PM' })).toBeTruthy();
-    expect(screen.getByText('Book flights to Lisbon')).toBeTruthy();
+function renderAt(hash: string) {
+  window.localStorage.clear();
+  window.history.replaceState(null, '', hash);
+  return render(<App initial={seedData(Date.now())} />);
+}
+
+describe('app', () => {
+  it('opens on Plan with the tray, the week and the sidebar', () => {
+    renderAt('#/plan');
+    expect(screen.getByRole('navigation', { name: 'Sections' })).toBeTruthy();
+    expect(screen.getAllByText('Reply to Sam').length).toBe(2);
+    expect(screen.getByText('Due')).toBeTruthy();
+    expect(screen.getAllByText('Portfolio site').length).toBeGreaterThan(0);
   });
 
-  it('ticks a task and offers a reset', async () => {
+  it('adds and ticks a task in the tray', async () => {
     const user = userEvent.setup();
-    render(<App />);
-    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
-    const row = screen.getByText('Reply to Sam').closest('li')!;
+    renderAt('#/plan');
+    await user.type(screen.getByRole('textbox', { name: 'Add a task' }), 'Water the plants{Enter}');
+    const row = screen.getByText('Water the plants').closest('li')!;
     await user.click(within(row).getByRole('checkbox'));
     expect(within(row).getByRole('checkbox').getAttribute('aria-checked')).toBe('true');
-    await user.click(screen.getByRole('button', { name: 'Reset' }));
-    expect(within(screen.getByText('Reply to Sam').closest('li')!).getByRole('checkbox').getAttribute('aria-checked')).toBe('false');
   });
 
-  it('adds a task', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.type(screen.getByRole('textbox', { name: 'Add a task' }), 'Call the bank{Enter}');
-    expect(screen.getByText('Call the bank')).toBeTruthy();
+  it('shows the flow canvas with cards and a project frame', () => {
+    renderAt('#/flows');
+    expect(document.querySelectorAll('[data-card]').length).toBe(6);
+    expect(document.querySelector('.frame-name')?.textContent).toBe('Portfolio site');
   });
 
-  it('switches to one-off scheduling and the booking page', async () => {
+  it('chats with Pip and applies what it does', async () => {
     const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'One-off scheduling' }));
-    expect(screen.getByText('Coffee chat')).toBeTruthy();
-    expect(screen.getByText(/Drag on the week to paint/)).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Booking page' }));
-    expect(screen.getByText('Intro call')).toBeTruthy();
-  });
-
-  it('switches between week and day view', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: /Week/ }));
-    await user.click(screen.getByRole('button', { name: /^Day/ }));
-    expect(screen.queryByText('Mon 21')).toBeNull();
-    expect(screen.getByText('Wed 23')).toBeTruthy();
+    renderAt('#/agent');
+    await user.type(screen.getByRole('textbox', { name: 'Message Pip' }), 'add buy oat milk{Enter}');
+    expect(await screen.findByText('Added task', {}, { timeout: 3000 })).toBeTruthy();
+    act(() => {
+      window.location.hash = '#/plan';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(await screen.findByText('Buy oat milk')).toBeTruthy();
   });
 });

@@ -112,3 +112,70 @@ export function ClockIcon() {
 
 /** The paint cursor used when marking free time: a small pill on a crosshair. */
 export const PAINT_CURSOR = `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='5'><rect x='0.5' y='0.5' width='23' height='4' rx='2' fill='white'/><rect x='1' y='1' width='22' height='3' rx='1.5' fill='%23141414'/></svg>") 12 2, crosshair`;
+
+export const FlowIcon = ({ size = 16 }: { size?: number }) => (
+  <Stroke size={size}>
+    <rect x="3" y="4" width="7" height="6" rx="2" />
+    <rect x="14" y="14" width="7" height="6" rx="2" />
+    <path d="M10 7h2.5a2.5 2.5 0 0 1 2.5 2.5V14" />
+  </Stroke>
+);
+
+export const SparkIcon = ({ size = 16 }: { size?: number }) => (
+  <Stroke size={size}>
+    <path d="M12 3.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5Z" />
+    <path d="M18.5 16.5c.2 1.4 1 2.2 2.5 2.5-1.5.3-2.3 1.1-2.5 2.5-.3-1.4-1.1-2.2-2.5-2.5 1.4-.3 2.2-1.1 2.5-2.5Z" />
+  </Stroke>
+);
+
+export const FlagIcon = ({ size = 12 }: { size?: number }) => (
+  <Stroke size={size} width="2.4">
+    <path d="M5.5 21V4.5" />
+    <path d="M5.5 4.5h11l-2 4 2 4h-11" />
+  </Stroke>
+);
+
+export const CloseIcon = ({ size = 14 }: { size?: number }) => (
+  <Stroke size={size} width="2.4">
+    <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
+  </Stroke>
+);
+
+export const SendIcon = ({ size = 16 }: { size?: number }) => (
+  <Stroke size={size} width="2.4">
+    <path d="M12 19V5" />
+    <path d="m6 11 6-6 6 6" />
+  </Stroke>
+);
+
+export const MinusIcon = () => (
+  <Stroke size={14} width="2.6">
+    <path d="M5 12h14" />
+  </Stroke>
+);
+
+export const FitIcon = () => (
+  <Stroke size={14} width="2.4">
+    <path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3" />
+  </Stroke>
+);
+
+export const GroupIcon = () => (
+  <Stroke size={14} width="2.3">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="4" strokeDasharray="3 3" />
+    <rect x="8" y="8" width="8" height="8" rx="2" />
+  </Stroke>
+);
+
+export const UndoIcon = () => (
+  <Stroke size={12} width="2.6">
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </Stroke>
+);
+
+export const MenuIcon = ({ size = 18 }: { size?: number }) => (
+  <Stroke size={size}>
+    <path d="M4 7h16M4 12h16M4 17h10" />
+  </Stroke>
+);
